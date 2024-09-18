@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from langchain.schema import HumanMessage, SystemMessage
 from langchain_community.chat_message_histories import ChatMessageHistory
 from layout import LayoutExtractor
 
@@ -9,29 +9,38 @@ load_dotenv()
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
-llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=openai_api_key)
+llm = ChatOpenAI(model="gpt-4", openai_api_key=openai_api_key)
 
 history = ChatMessageHistory()
 
 layout_extractor = LayoutExtractor("Texract-JSON/TestanalyzeDocResponse.json")
 
-def compose_prompt(user_input: str) -> str:
+def get_system_message() -> SystemMessage:
     layout_details = layout_extractor.get_layout_details()
-    prompt = f"""
-    You are an AI assistant that genrates magazine content based on user queries. Using the Document Layout Details you will generate real content that matches the layout element types and their word counts. In the response you need to provide Layout Title, Layout Section Header, and Layout Text based on the provided layout details while strictly following the word count for each layout element type.
-
-    Layout Details and the Word Counts Follow the same format and structure in your response:
+    system_prompt = f"""
+    You are an AI assistant that generates magazine content based on user queries. Using the Document Layout Details, you will generate content that matches the layout element types and their word counts.
+    
+    Ensure the response includes all the necessary layout elements for example: 
+    - Layout Title
+    - Layout Section Header
+    - Layout Text
+    
+    Strictly, Follow the WORD COUNT for each layout element type and respond accordingly.
+    
+    Layout Details:
     {layout_details}
-
-    User's Query:
-    {user_input}
-
-    Please respond based on the provided layout details and make sure your response is informative and helpful. Give relevant content based on the input query and the layout details.
+    
+    Your task is to create relevant magazine content based on these details and the user's query.
     """
-    return prompt
+    return SystemMessage(content=system_prompt)
+
 
 def start_chat():                                    
     print("Start chatting with the AI (type 'exit' to stop):")
+    
+    system_message = get_system_message()
+    history.add_message(system_message)
+    
     while True:
         user_input = input("User: ")
         if user_input.lower() == 'exit':
@@ -41,11 +50,10 @@ def start_chat():
         user_message = HumanMessage(content=user_input)
         history.add_message(user_message)
     
-        prompt = compose_prompt(user_input)
-        
-        response = llm.invoke(prompt)
+        messages = history.messages
+        response = llm.invoke(messages)
 
-        print(f"AI: {response.content}")
+        print(f"Magazine-AI: {response.content}")
         history.add_message(response)
 
 if __name__ == "__main__":

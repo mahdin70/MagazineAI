@@ -23,10 +23,17 @@ class LayoutExtractor:
         page_blocks = [block for block in self.data["Blocks"] if block["BlockType"] == "PAGE"]
         layout_details = ""
 
+        block_counts = {
+            "LAYOUT_TITLE": [], 
+            "LAYOUT_SECTION_HEADER": [], 
+            "LAYOUT_TEXT": [], 
+            "LAYOUT_HEADER": [], 
+            "LAYOUT_FOOTER": []
+        }
+
         for page_block in page_blocks:
             page_content = f"Page {page_block['Page']}\n"
-            
-            block_counts = {"LAYOUT_TITLE": [], "LAYOUT_SECTION_HEADER": [], "LAYOUT_TEXT": []}
+            layout_details += page_content
 
             def render_block_with_counts(block, block_counts):
                 output = ""
@@ -38,12 +45,42 @@ class LayoutExtractor:
 
                 for child_id in block.get("Relationships", [{}])[0].get("Ids", []):
                     child_block = self.get_block_by_id(child_id)
-                    if child_block and child_block["BlockType"] in ["LAYOUT_TEXT", "LAYOUT_SECTION_HEADER"]:
+                    if child_block and child_block["BlockType"] in block_counts:
                         output += render_block_with_counts(child_block, block_counts)
                 
                 return output
 
             block_content = "".join(render_block_with_counts(self.get_block_by_id(id), block_counts) for id in page_block["Relationships"][0]["Ids"])
-            layout_details += page_content + block_content + "\n" 
+            layout_details += block_content + "\n" 
 
         return layout_details
+  
+    def extract_text_from_block(self, block: Dict[str, Any]) -> str:
+        if block["BlockType"] == "WORD":
+            return block.get("Text", "")
+        
+        text_content = ""
+        if "Relationships" in block:
+            for child_id in block["Relationships"][0].get("Ids", []):
+                child_block = self.get_block_by_id(child_id)
+                text_content += self.extract_text_from_block(child_block) + " "
+        
+        return text_content.strip()
+
+    def get_text_from_layout(self) -> str:
+        page_blocks = [block for block in self.data["Blocks"] if block["BlockType"] == "PAGE"]
+        layout_text = ""
+
+        for page_block in page_blocks:
+            page_content = f"Page {page_block['Page']}\n"
+            layout_text += page_content
+
+            for block_id in page_block["Relationships"][0].get("Ids", []):
+                block = self.get_block_by_id(block_id)
+
+                if block["BlockType"] in ["LAYOUT_TITLE", "LAYOUT_SECTION_HEADER", "LAYOUT_TEXT", "LAYOUT_HEADER", "LAYOUT_FOOTER"]:
+                    block_type = block["BlockType"]
+                    text = self.extract_text_from_block(block)
+                    layout_text += f"{block_type}: {text}\n"
+                    
+        return layout_text

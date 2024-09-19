@@ -1,3 +1,4 @@
+import datetime
 import os
 import time
 import threading
@@ -6,14 +7,21 @@ from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_community.chat_message_histories import ChatMessageHistory
 from layout import LayoutExtractor
+from pymongo import MongoClient
 
 load_dotenv()
+
+mongo_uri = os.getenv("MONGO_URI")
+client = MongoClient(mongo_uri)
+db = client['MagazineAIChatDatabase'] 
+chat_collection = db['ChatHistory']
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=openai_api_key)
 
 history = ChatMessageHistory()
+stop_loader = False
 
 layout_extractor = LayoutExtractor("Texract-JSON/MedicalAnalyzeDocResponse.json")
 
@@ -55,19 +63,47 @@ def get_system_message() -> SystemMessage:
     """
     return SystemMessage(content=system_prompt)
 
-
+     
 def loader_animation():
     while not stop_loader:
         for symbol in '|/-\\':
             print(f'\rGenerating the Response {symbol}', end='', flush=True)
             time.sleep(0.1)
 
-def start_chat():                                    
+def append_message(role, content):
+    conversation = chat_collection.find_one()
+
+    if conversation:
+        chat_collection.update_one(
+            {'_id': conversation['_id']},
+            {'$push': {'messages': {'role': role, 'content': content, 'timestamp': datetime.datetime.now()}},
+             '$set': {'updatedAt': datetime.datetime.now()}}
+        )
+    else:
+       chat_collection.insert_one({
+            'messages': [{'role': role, 'content': content, 'timestamp': datetime.datetime.now()}],
+            'createdAt': datetime.datetime.now(),
+            'updatedAt': datetime.datetime.now()
+        })
+
+def fetch_previous_context():
+    conversation = chat_collection.find_one()
+    if conversation:
+        return conversation['messages']
+    return []
+
+def start_chat():
+    previous_context = fetch_previous_context()
+    for item in previous_context:
+        print(f"{item['role'].capitalize()}: {item['content']}")
+        
+    history.add_messages(previous_context)
+    
     print("Start chatting with the AI (type 'exit' to stop):")
     
     system_message = get_system_message()
     history.add_message(system_message)
-    
+
     global stop_loader
     stop_loader = False
     
@@ -84,7 +120,7 @@ def start_chat():
         
         user_message = HumanMessage(content=user_input)
         history.add_message(user_message)
-    
+
         messages = history.messages
         
         response = llm.invoke(messages)
@@ -97,6 +133,10 @@ def start_chat():
         
         print(f"\rMagazine-AI: {response.content}")
         history.add_message(response)
+
+        append_message('user', user_input)
+        append_message('ai', response.content)
+        
         print(f"Time taken: {elapsed_time:.2f}s")
 
 if __name__ == "__main__":

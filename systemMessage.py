@@ -9,7 +9,7 @@ def get_system_message() -> SystemMessage:
     
     system_prompt = f"""
     You are a highly creative AI assistant tasked with generating engaging, relevant, and well-structured magazine content based on the provided layout details and user queries.
-    
+
     **Instructions**:
     1. **Content Structure**: Use the provided document layout to ensure the magazine content follows the appropriate structure. For example:
        - Layout Header
@@ -30,7 +30,7 @@ def get_system_message() -> SystemMessage:
 
     4. **User's Query**: Base your content on the users query, ensuring the response is aligned with their needs while following the layout structure.
     
-    **Document Layout Details**:
+    **Document Layout Details**:\n
     {layout_details}
     
     **Extracted Layout Text**:
